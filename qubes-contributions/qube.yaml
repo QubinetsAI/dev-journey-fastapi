@@ -1,0 +1,69 @@
+keycloak:
+  qubeKey: dev-journey-fastapi
+  name: DEV Journey FastAPI
+  version: v1.0.2
+  chart: dev-journey-fastapi
+  repo: https://gitlab.com/api/v4/projects/60777558/packages/helm/stable
+  type: chart-helm-repository
+  id: dev-journey-fastapi
+  maturity: alpha
+
+  ui:
+    icon: dev-journey-fastapi
+    shortDescription: DEV Journey FastAPI
+    description: DEV Journey FastAPI is a sample FastAPI project for developers written in Python
+    links:
+    - linkName: Homepage
+      url:
+    - linkName: Documentation
+      url:
+    - linkName: Github
+      url:
+    catalogItem: true
+    maxNumOfInstances: 1
+    cpu: 1
+    ram: 2
+    disk: 10
+
+  metadata:
+    id: fastapi
+    domain: "{{ defaults.workspace.subdomain }}.{{ defaults.workspace.domain }}"
+    url: "{{ metadata.id }}.{{ metadata.domain }}"
+
+  properties:
+    dockerRegistry:
+      type: text
+      displayName: "Docker registry"
+      parameterId: dockerRegistry
+      defaultValue: "registry.gitlab.com"
+      readOnly: false
+      required: true
+      validationRegex: ""
+    dockerUsername:
+      type: text
+      displayName: "Docker username"
+      parameterId: dockerUsername
+      defaultValue: "admin"
+      readOnly: false
+      required: true
+      validationRegex: ""
+    dockerPassword:
+      type: password
+      displayName: "Docker password"
+      parameterId: dockerPassword
+      defaultValue: "admin"
+      readOnly: false
+      required: true
+      validationRegex: ""
+    dockerEmail:
+      type: text
+      displayName: "Docker email"
+      parameterId: dockerEmail
+      defaultValue: "admin@qubinets.com"
+      readOnly: false
+      required: true
+      validationRegex: ""
+
+  schemaType: {}
+
+  schemaData: {}
