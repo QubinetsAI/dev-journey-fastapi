@@ -7,6 +7,11 @@ on:
     tags:
       - '*'
 
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
 jobs:
   build_docker_image:
     name: Build Docker Image
