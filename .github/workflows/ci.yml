@@ -1,0 +1,143 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - '*'
+
+jobs:
+  build_docker_image:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    env:
+      DOCKER_BUILDKIT: 1
+      DOCKER_DRIVER: overlay2
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Show Docker info
+        run: docker info
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get build name
+        id: get_build_name
+        run: |
+          BUILD_NAME=$(git describe --tags || echo ${{ github.run_number }})
+          echo "BUILD_NAME=$BUILD_NAME" >> $GITHUB_ENV
+          echo "Build name: $BUILD_NAME"
+
+      - name: Build and push Docker image
+        run: |
+          docker build -t ghcr.io/${{ github.repository }}:${{ env.BUILD_NAME }} \
+                        -t ghcr.io/${{ github.repository }}:latest \
+                        --build-arg BUILDKIT_INLINE_CACHE=1 \
+                        --cache-from ghcr.io/${{ github.repository }} .
+          docker push ghcr.io/${{ github.repository }} --all-tags
+
+  build_helm_chart:
+    name: Build Helm Chart
+    runs-on: ubuntu-latest
+    needs: build_docker_image
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v3
+
+      - name: Helm version
+        run: helm version
+
+      - name: Get build name
+        run: |
+          echo "GITHUB_REF=${GITHUB_REF}"
+          BUILD_NAME=$(echo "${GITHUB_REF}" | sed 's|refs/heads/||; s|refs/tags/||')
+          if [ -z "$BUILD_NAME" ]; then BUILD_NAME=${{ github.run_number }}; fi
+          echo "BUILD_NAME=$BUILD_NAME" >> $GITHUB_ENV
+          echo "Build name: $BUILD_NAME"
+
+      - name: Package Helm chart
+        run: |
+          helm package charts/${{ github.event.repository.name }} --version ${{ env.BUILD_NAME }} -d .
+
+      - name: Create GitHub Release and upload Helm chart
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: ${{ github.event.repository.name }}-${{ env.BUILD_NAME }}.tgz
+          tag: ${{ env.BUILD_NAME }}
+          name: Release ${{ env.BUILD_NAME }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          allowUpdates: true
+
+  build_qubes_contributions:
+    name: Build Qubes Contributions
+    runs-on: ubuntu-latest
+    needs: build_helm_chart
+    env:
+      GITLAB_PROJECT_ID: 'YOUR_GITLAB_PROJECT_ID'  # Replace with actual project ID
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Git user
+        run: |
+          git config --global user.email "github-actions@github.com"
+          git config --global user.name "GitHub Actions"
+
+      - name: Get build name
+        run: |
+          echo "GITHUB_REF=${GITHUB_REF}"
+          BUILD_NAME=$(echo "${GITHUB_REF}" | sed 's|refs/heads/||; s|refs/tags/||')
+          if [ -z "$BUILD_NAME" ]; then BUILD_NAME=${{ github.run_number }}; fi
+          echo "BUILD_NAME=$BUILD_NAME" >> $GITHUB_ENV
+          echo "Build name: $BUILD_NAME"
+
+      - name: Update qube.yaml and values.yaml
+        run: |
+          sed -i 's/qubeKey:.*/qubeKey: '"${{ github.event.repository.name }}"'/g' qubes-contributions/qube.yaml
+          sed -i 's/name:.*/name: '"${{ github.event.repository.name }}"'/g' qubes-contributions/qube.yaml
+          sed -i 's/version:.*/version: '"${{ env.BUILD_NAME }}"'/g' qubes-contributions/qube.yaml
+          sed -i 's/chart:.*/chart: '"${{ github.event.repository.name }}"'/g' qubes-contributions/qube.yaml
+          sed -i 's|repo:.*|repo: https://github.com/'"${{ github.repository }}"'/releases/download/'"${{ env.BUILD_NAME }}"'|g' qubes-contributions/qube.yaml
+          sed -i 's/id:.*/id: '"${{ github.event.repository.name }}"'/g' qubes-contributions/qube.yaml
+          sed -i 's/icon:.*/icon: '"${{ github.event.repository.name }}"'/g' qubes-contributions/qube.yaml
+          sed -i 's/shortDescription:.*/shortDescription: '"${{ github.event.repository.name }}"'/g' qubes-contributions/qube.yaml
+          sed -i 's/description:.*/description: '"${{ github.event.repository.name }}"'/g' qubes-contributions/qube.yaml
+
+          sed -i 's|repository:.*|repository: ghcr.io/'"${{ github.repository }}"'|g' qubes-contributions/values.yaml
+
+      - name: Display updated files
+        run: |
+          cat qubes-contributions/qube.yaml
+          cat qubes-contributions/values.yaml
+
+      - name: Clone external repository
+        run: |
+          git clone https://oauth2:${{ secrets.GITLAB_TOKEN }}@gitlab.com/qubes-contributions/qubes-contributions.git external_repo
+
+      - name: Commit and push changes
+        run: |
+          cd external_repo
+          git checkout -b issue/${{ github.event.repository.name }}
+          mkdir -p apps/${{ github.event.repository.name }}
+      #    cp ../qubes-contributions/qube.yaml apps/${{ github.event.repository.name }}/qube.yaml
+      #    cp ../qubes-contributions/values.yaml apps/${{ github.event.repository.name }}/values.yaml
+      #    git add .
+      #    git commit -m "CI: Update Qubes contributions files"
+      #    git push origin issue/${{ github.event.repository.name }}
+
+      #- name: Create Merge Request
+      #  run: |
+      #    curl --request POST \
+      #         --header "PRIVATE-TOKEN: ${{ secrets.GITLAB_TOKEN }}" \
+      #         --data "source_branch=issue/${{ github.event.repository.name }}&target_branch=main&title=CI%3A%20Update%20Files&description=This%20merge%20request%20was%20automatically%20created%20by%20the%20CI." \
+      #         "https://gitlab.com/api/v4/projects/${{ env.GITLAB_PROJECT_ID }}/merge_requests"
