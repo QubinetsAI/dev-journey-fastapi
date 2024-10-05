@@ -65,8 +65,7 @@ jobs:
       - name: Get build name
         run: |
           echo "GITHUB_REF=${GITHUB_REF}"
-          BUILD_NAME=$(echo "${GITHUB_REF}" | sed 's|refs/heads/||; s|refs/tags/||')
-          if [ -z "$BUILD_NAME" ]; then BUILD_NAME=${{ github.run_number }}; fi
+          BUILD_NAME=$(git describe --tags || echo ${{ github.run_number }})
           echo "BUILD_NAME=$BUILD_NAME" >> $GITHUB_ENV
           echo "Build name: $BUILD_NAME"
 
@@ -101,8 +100,7 @@ jobs:
       - name: Get build name
         run: |
           echo "GITHUB_REF=${GITHUB_REF}"
-          BUILD_NAME=$(echo "${GITHUB_REF}" | sed 's|refs/heads/||; s|refs/tags/||')
-          if [ -z "$BUILD_NAME" ]; then BUILD_NAME=${{ github.run_number }}; fi
+          BUILD_NAME=$(git describe --tags || echo ${{ github.run_number }})
           echo "BUILD_NAME=$BUILD_NAME" >> $GITHUB_ENV
           echo "Build name: $BUILD_NAME"
 
